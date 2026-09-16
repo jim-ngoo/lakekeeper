@@ -1,0 +1,82 @@
+# Opt-in OpenFGA authorization overlay.
+# Use together with docker-compose.yaml after completing the AuthN-only POC.
+services:
+  lakekeeper:
+    environment:
+      - LAKEKEEPER__AUTHZ_BACKEND=openfga
+      - LAKEKEEPER__OPENFGA__ENDPOINT=http://openfga:8081
+      - LAKEKEEPER__OPENFGA__CLIENT_ID=openfga
+      - LAKEKEEPER__OPENFGA__CLIENT_SECRET=xqE1vUrifVDKAZdLuz6JAnDxMYLdGu5z
+      - LAKEKEEPER__OPENFGA__TOKEN_ENDPOINT=http://keycloak:8080/realms/iceberg/protocol/openid-connect/token
+    depends_on:
+      openfga:
+        condition: service_healthy
+
+  migrate:
+    environment:
+      - LAKEKEEPER__AUTHZ_BACKEND=openfga
+      - LAKEKEEPER__OPENFGA__ENDPOINT=http://openfga:8081
+      - LAKEKEEPER__OPENFGA__CLIENT_ID=openfga
+      - LAKEKEEPER__OPENFGA__CLIENT_SECRET=xqE1vUrifVDKAZdLuz6JAnDxMYLdGu5z
+      - LAKEKEEPER__OPENFGA__TOKEN_ENDPOINT=http://keycloak:8080/realms/iceberg/protocol/openid-connect/token
+    depends_on:
+      openfga:
+        condition: service_healthy
+
+  openfga-db:
+    image: postgres:17
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    command: -c 'max_connections=500'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -p 5432 -d postgres"]
+      interval: 2s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+    networks:
+      iceberg_net:
+
+  openfga-migrate:
+    image: openfga/openfga:v1.14
+    command: migrate
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://postgres:postgres@openfga-db:5432/postgres?sslmode=disable
+    networks:
+      iceberg_net:
+    depends_on:
+      openfga-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  openfga:
+    image: openfga/openfga:v1.14
+    command: run
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://postgres:postgres@openfga-db:5432/postgres?sslmode=disable
+      - OPENFGA_DATASTORE_MAX_OPEN_CONNS=200
+      - OPENFGA_DATASTORE_MAX_IDLE_CONNS=100
+      - OPENFGA_PLAYGROUND_ENABLED=false
+      - OPENFGA_AUTHN_METHOD=oidc
+      - OPENFGA_AUTHN_OIDC_ISSUER=http://keycloak:8080/realms/iceberg
+      - OPENFGA_AUTHN_OIDC_ISSUER_ALIASES=http://localhost:30080/realms/iceberg
+      - OPENFGA_AUTHN_OIDC_AUDIENCE=openfga
+      - OPENFGA_HTTP_TLS_ENABLED=false
+      - OPENFGA_CACHE_CONTROLLER_ENABLED=true
+      - OPENFGA_CHECK_QUERY_CACHE_ENABLED=true
+      - OPENFGA_CHECK_ITERATOR_CACHE_ENABLED=true
+    depends_on:
+      openfga-db:
+        condition: service_healthy
+      openfga-migrate:
+        condition: service_completed_successfully
+    networks:
+      iceberg_net:
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=openfga:8081"]
+      interval: 5s
+      timeout: 30s
+      retries: 3
