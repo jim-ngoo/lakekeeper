@@ -41,6 +41,8 @@ Useful endpoints:
 
 The example users are `peter` / `iceberg` and `anna` / `iceberg`.
 
+The Lakekeeper UI's Preview tab reads Iceberg files directly from Silo in the browser. This example exposes Silo at [http://silo.localhost:9000](http://silo.localhost:9000) and enables CORS for that browser access. If the warehouse was created with the older Docker-only `http://silo:9000` endpoint, run `docker compose up -d` to apply the Silo settings, then rerun notebook section 4 to update the existing warehouse storage profile in place.
+
 ### 2. Enable OpenFGA authorization
 
 Stop writes during this procedure. Keep the existing Postgres and Silo volumes so the exercise proves an in-place cutover.
@@ -112,6 +114,7 @@ docker compose -f docker-compose.yaml -f docker-compose-authz.yaml config
 
 * `401` means authentication failed. Check issuer, audience, expiry, Keycloak reachability, and the matching Lakekeeper error ID in logs.
 * `403` after the cutover means authentication succeeded but OpenFGA denied the action. Check bootstrap and grants.
+* A CORS error in the UI Preview tab means the browser cannot reach the warehouse's S3 endpoint or Silo is not returning CORS headers. Confirm [http://silo.localhost:9000](http://silo.localhost:9000) is reachable, then rerun section 4 to repair an older stored endpoint.
 * Missing objects after the cutover usually mean reconcile did not run against the same Postgres catalog.
 * Missing privileges after reconcile are expected: ownership, grants, and role assignments must be recreated.
 
