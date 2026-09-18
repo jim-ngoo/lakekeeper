@@ -9,6 +9,8 @@ services:
       starrocks:
         condition: service_healthy
     command: start-notebook.sh --NotebookApp.token=''
+    extra_hosts:
+      - "localtest.me:host-gateway"
     volumes:
       - ./notebooks:/home/jovyan/examples/
     networks:
@@ -51,6 +53,8 @@ services:
   lakekeeper:
     image: ${LAKEKEEPER_TEST__SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}
     pull_policy: always
+    extra_hosts:
+      - "localtest.me:host-gateway"
     environment:
       - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
       - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://postgres:postgres@db:5432/postgres
@@ -149,8 +153,6 @@ services:
       - "9000:9000"
     networks:
       iceberg_net:
-        aliases:
-          - silo.localhost
 
   create-bucket:
     # Silo starts with no buckets, so create the one the warehouse points at.
